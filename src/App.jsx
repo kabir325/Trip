@@ -52,6 +52,13 @@ function formatCurrency(amount) {
   }).format(amount || 0);
 }
 
+function formatCompactCurrency(amount) {
+  return new Intl.NumberFormat('en-IN', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(amount || 0);
+}
+
 function normalizeMinorStop(stop, index) {
   return {
     id: stop.id || `minor-${Date.now()}-${index}`,
@@ -380,6 +387,8 @@ function App() {
   );
   const recentExpenses = expenses.slice(0, 6);
   const maxCategoryTotal = Math.max(...categoryTotals.map((item) => item.total), 0);
+  const chartMax = maxCategoryTotal > 0 ? maxCategoryTotal : 1;
+  const chartTicks = [4, 3, 2, 1, 0].map((step) => Math.round((chartMax * step) / 4));
 
   const majorMarkers = useMemo(
     () =>
@@ -664,30 +673,6 @@ function App() {
       <header className="hero panel">
         <div className="hero-copy">
           <h1>First Solo Bike Road Trip Planner</h1>
-          <div className="hero-meta">
-            <span>{tripMeta.dateRange}</span>
-            <span>{tripMeta.startLocation}</span>
-            <span>{dailyPlan.length} days planned</span>
-          </div>
-        </div>
-
-        <div className="hero-side">
-          <div className="page-switcher">
-            <button
-              type="button"
-              className={`status-toggle ${activePage === 'planner' ? 'active' : ''}`}
-              onClick={() => setActivePage('planner')}
-            >
-              Planner
-            </button>
-            <button
-              type="button"
-              className={`status-toggle ${activePage === 'settings' ? 'active' : ''}`}
-              onClick={() => setActivePage('settings')}
-            >
-              Settings
-            </button>
-          </div>
 
           <div className="stat-grid">
             <article className="stat-card">
@@ -714,6 +699,25 @@ function App() {
               </strong>
               <small>{formatCurrency(shoppingTotal)} current buy list value</small>
             </article>
+          </div>
+        </div>
+
+        <div className="hero-side">
+          <div className="page-switcher">
+            <button
+              type="button"
+              className={`status-toggle ${activePage === 'planner' ? 'active' : ''}`}
+              onClick={() => setActivePage('planner')}
+            >
+              Planner
+            </button>
+            <button
+              type="button"
+              className={`status-toggle ${activePage === 'settings' ? 'active' : ''}`}
+              onClick={() => setActivePage('settings')}
+            >
+              Settings
+            </button>
           </div>
         </div>
       </header>
@@ -759,11 +763,12 @@ function App() {
                 <div className="planner-nav">
                   <button
                     type="button"
-                    className="ghost-button"
+                    className="nav-arrow"
                     onClick={() => goToPlannerDay(-1)}
                     disabled={plannerDayIndex <= 0}
+                    aria-label="Previous day"
                   >
-                    Previous day
+                    &lt;
                   </button>
                   <div className="planner-nav-copy">
                     <span>Showing</span>
@@ -771,11 +776,12 @@ function App() {
                   </div>
                   <button
                     type="button"
-                    className="ghost-button"
+                    className="nav-arrow"
                     onClick={() => goToPlannerDay(1)}
                     disabled={plannerDayIndex >= dailyPlan.length - 1}
+                    aria-label="Next day"
                   >
-                    Next day
+                    &gt;
                   </button>
                 </div>
 
@@ -935,19 +941,21 @@ function App() {
                 <div className="planner-nav planner-nav-bottom">
                   <button
                     type="button"
-                    className="ghost-button"
+                    className="nav-arrow"
                     onClick={() => goToPlannerDay(-1)}
                     disabled={plannerDayIndex <= 0}
+                    aria-label="Previous day"
                   >
-                    Previous day
+                    &lt;
                   </button>
                   <button
                     type="button"
-                    className="ghost-button"
+                    className="nav-arrow"
                     onClick={() => goToPlannerDay(1)}
                     disabled={plannerDayIndex >= dailyPlan.length - 1}
+                    aria-label="Next day"
                   >
-                    Next day
+                    &gt;
                   </button>
                 </div>
               </>
@@ -1052,23 +1060,45 @@ function App() {
 
               <div className="expense-chart-panel">
                 <h3 className="subheading">Category breakdown</h3>
-                <div className="bar-chart">
-                  {categoryTotals.map((item) => (
-                    <div className="bar-row" key={item.category}>
-                      <div className="bar-row-top">
-                        <span>{item.category}</span>
-                        <strong>{formatCurrency(item.total)}</strong>
-                      </div>
-                      <div className="bar-track">
+                <div className="column-chart">
+                  <div className="chart-y-axis">
+                    {chartTicks.map((tick) => (
+                      <span key={tick}>{formatCompactCurrency(tick)}</span>
+                    ))}
+                  </div>
+                  <div className="chart-plot">
+                    <div className="chart-grid-lines">
+                      {chartTicks.map((tick, index) => (
                         <div
-                          className="bar-fill"
-                          style={{
-                            width: `${
-                              maxCategoryTotal ? (item.total / maxCategoryTotal) * 100 : 0
-                            }%`,
-                          }}
+                          className={`chart-grid-line ${index === chartTicks.length - 1 ? 'baseline' : ''}`}
+                          key={`${tick}-${index}`}
                         />
-                      </div>
+                      ))}
+                    </div>
+                    <div className="chart-columns">
+                      {categoryTotals.map((item) => (
+                        <div className="chart-column-wrap" key={item.category}>
+                          <span className="chart-value">{formatCompactCurrency(item.total)}</span>
+                          <div className="chart-column-track">
+                            <div
+                              className="chart-column-fill"
+                              style={{
+                                height: `${(item.total / chartMax) * 100}%`,
+                              }}
+                            />
+                          </div>
+                          <span className="chart-x-label">{item.category}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="chart-x-axis" />
+                  </div>
+                </div>
+                <div className="chart-summary-grid">
+                  {categoryTotals.map((item) => (
+                    <div className="chart-summary-card" key={`${item.category}-summary`}>
+                      <span>{item.category}</span>
+                      <strong>{formatCurrency(item.total)}</strong>
                     </div>
                   ))}
                 </div>
