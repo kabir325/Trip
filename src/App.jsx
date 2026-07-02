@@ -671,9 +671,27 @@ function App() {
   return (
     <div className="app-shell">
       <header className="hero panel">
-        <div className="hero-copy">
-          <h1>First Solo Bike Road Trip Planner</h1>
+        <div className="hero-header-row">
+          <div className="hero-copy">
+            <p className="eyebrow">Field Operations</p>
+            <h1>First Solo Bike Road Trip Planner</h1>
+          </div>
 
+          <div className="hero-status-cluster">
+            <span className="system-pill">
+              <span className="status-dot" />
+              Route system active
+            </span>
+            <span className="system-pill alt">
+              <span className="status-dot alt" />
+              {activePage === 'planner' ? 'Planner view online' : 'Settings link active'}
+            </span>
+          </div>
+        </div>
+
+        <div className="hero-divider" />
+
+        <div className="hero-bottom">
           <div className="stat-grid">
             <article className="stat-card">
               <span>Visited days</span>
@@ -700,24 +718,24 @@ function App() {
               <small>{formatCurrency(shoppingTotal)} current buy list value</small>
             </article>
           </div>
-        </div>
 
-        <div className="hero-side">
-          <div className="page-switcher">
-            <button
-              type="button"
-              className={`status-toggle ${activePage === 'planner' ? 'active' : ''}`}
-              onClick={() => setActivePage('planner')}
-            >
-              Planner
-            </button>
-            <button
-              type="button"
-              className={`status-toggle ${activePage === 'settings' ? 'active' : ''}`}
-              onClick={() => setActivePage('settings')}
-            >
-              Settings
-            </button>
+          <div className="hero-side">
+            <div className="page-switcher">
+              <button
+                type="button"
+                className={`status-toggle ${activePage === 'planner' ? 'active' : ''}`}
+                onClick={() => setActivePage('planner')}
+              >
+                Planner
+              </button>
+              <button
+                type="button"
+                className={`status-toggle ${activePage === 'settings' ? 'active' : ''}`}
+                onClick={() => setActivePage('settings')}
+              >
+                Settings
+              </button>
+            </div>
           </div>
         </div>
       </header>
