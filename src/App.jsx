@@ -12,6 +12,7 @@ import {
   initialDailyPlan,
   packingChecklist as defaultPackingChecklist,
   planningChecklist as defaultPlanningChecklist,
+  starterExpenseCategories,
   starterExpenses,
   starterNotes,
   starterShoppingList,
@@ -24,6 +25,9 @@ const packingStorageKey = 'tripflow-packing';
 const expensesStorageKey = 'tripflow-expenses';
 const notesStorageKey = 'tripflow-notes';
 const shoppingStorageKey = 'tripflow-shopping';
+const categoriesStorageKey = 'tripflow-expense-categories';
+const activePageStorageKey = 'tripflow-active-page';
+const selectedDayStorageKey = 'tripflow-selected-day';
 
 function loadStoredValue(key, fallback) {
   const savedValue = window.localStorage.getItem(key);
@@ -61,10 +65,37 @@ function createDayTemplate(dayNumber) {
     specialityFood: '',
     beforeGoing: '',
     visited: false,
+    startLat: '',
+    startLng: '',
     overnightLat: '',
     overnightLng: '',
     minorStops: [],
   };
+}
+
+function createChecklistItem(prefix) {
+  return {
+    id: `${prefix}-${Date.now()}`,
+    label: '',
+    done: false,
+  };
+}
+
+function splitLines(value) {
+  return value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseRouteLinks(value) {
+  return splitLines(value).map((line) => {
+    const [urlPart, labelPart] = line.split('|');
+    const url = urlPart?.trim() || '';
+    const label = labelPart?.trim() || url;
+
+    return { url, label };
+  });
 }
 
 function MapViewport({ coordinates }) {
@@ -81,51 +112,16 @@ function MapViewport({ coordinates }) {
   return null;
 }
 
-function ChecklistCard({ title, items, onToggle }) {
-  const doneCount = items.filter((item) => item.done).length;
-
-  return (
-    <section className="panel">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Checklist</p>
-          <h2>{title}</h2>
-        </div>
-        <span className="badge">
-          {doneCount}/{items.length}
-        </span>
-      </div>
-
-      <div className="checklist">
-        {items.map((item) => (
-          <label className="check-item" key={item.id}>
-            <input
-              type="checkbox"
-              checked={item.done}
-              onChange={() => onToggle(item.id)}
-            />
-            <span>{item.label}</span>
-          </label>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function RouteMap({ title, eyebrow, description, coordinates, markers, lineColor }) {
+function RouteMap({ title, markers, coordinates, lineColor }) {
   const safeCoordinates = coordinates.filter(
     (point) => Number.isFinite(point[0]) && Number.isFinite(point[1]),
   );
-
   const fallbackCenter = safeCoordinates[0] || [12.9716, 77.5946];
 
   return (
     <section className="panel">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">{eyebrow}</p>
-          <h2>{title}</h2>
-        </div>
+      <div className="section-heading compact-heading">
+        <h2>{title}</h2>
         <span className="badge">{markers.length} markers</span>
       </div>
 
@@ -165,14 +161,47 @@ function RouteMap({ title, eyebrow, description, coordinates, markers, lineColor
           ))}
         </MapContainer>
       </div>
-      <p className="map-note">{description}</p>
+    </section>
+  );
+}
+
+function ChecklistCard({ title, items, onToggle }) {
+  const doneCount = items.filter((item) => item.done).length;
+
+  return (
+    <section className="panel">
+      <div className="section-heading compact-heading">
+        <h2>{title}</h2>
+        <span className="badge">
+          {doneCount}/{items.length}
+        </span>
+      </div>
+
+      <div className="checklist">
+        {items.map((item) => (
+          <label className="check-item" key={item.id}>
+            <input
+              type="checkbox"
+              checked={item.done}
+              onChange={() => onToggle(item.id)}
+            />
+            <span>{item.label}</span>
+          </label>
+        ))}
+      </div>
     </section>
   );
 }
 
 function App() {
+  const [activePage, setActivePage] = useState(() =>
+    loadStoredValue(activePageStorageKey, 'planner'),
+  );
   const [dailyPlan, setDailyPlan] = useState(() =>
     loadStoredValue(dailyPlanStorageKey, initialDailyPlan),
+  );
+  const [selectedDayId, setSelectedDayId] = useState(() =>
+    loadStoredValue(selectedDayStorageKey, initialDailyPlan[0]?.id || ''),
   );
   const [planningTasks, setPlanningTasks] = useState(() =>
     loadStoredValue(planningStorageKey, defaultPlanningChecklist),
@@ -186,12 +215,15 @@ function App() {
   const [shoppingList, setShoppingList] = useState(() =>
     loadStoredValue(shoppingStorageKey, starterShoppingList),
   );
+  const [expenseCategories, setExpenseCategories] = useState(() =>
+    loadStoredValue(categoriesStorageKey, starterExpenseCategories),
+  );
   const [notes, setNotes] = useState(() =>
     loadStoredValue(notesStorageKey, starterNotes),
   );
   const [expenseDraft, setExpenseDraft] = useState({
     title: '',
-    category: 'Fuel',
+    category: starterExpenseCategories[0] || 'Other',
     place: '',
     amount: '',
     date: '',
@@ -201,10 +233,25 @@ function App() {
     link: '',
     price: '',
   });
+  const [categoryDraft, setCategoryDraft] = useState('');
+
+  useEffect(() => {
+    window.localStorage.setItem(activePageStorageKey, JSON.stringify(activePage));
+  }, [activePage]);
 
   useEffect(() => {
     window.localStorage.setItem(dailyPlanStorageKey, JSON.stringify(dailyPlan));
   }, [dailyPlan]);
+
+  useEffect(() => {
+    window.localStorage.setItem(selectedDayStorageKey, JSON.stringify(selectedDayId));
+  }, [selectedDayId]);
+
+  useEffect(() => {
+    if (!dailyPlan.find((day) => day.id === selectedDayId)) {
+      setSelectedDayId(dailyPlan[0]?.id || '');
+    }
+  }, [dailyPlan, selectedDayId]);
 
   useEffect(() => {
     window.localStorage.setItem(planningStorageKey, JSON.stringify(planningTasks));
@@ -223,8 +270,24 @@ function App() {
   }, [shoppingList]);
 
   useEffect(() => {
+    window.localStorage.setItem(categoriesStorageKey, JSON.stringify(expenseCategories));
+  }, [expenseCategories]);
+
+  useEffect(() => {
     window.localStorage.setItem(notesStorageKey, JSON.stringify(notes));
   }, [notes]);
+
+  useEffect(() => {
+    if (!expenseCategories.includes(expenseDraft.category)) {
+      setExpenseDraft((current) => ({
+        ...current,
+        category: expenseCategories[0] || 'Other',
+      }));
+    }
+  }, [expenseCategories, expenseDraft.category]);
+
+  const selectedDay =
+    dailyPlan.find((day) => day.id === selectedDayId) || dailyPlan[0] || null;
 
   const visitedCount = dailyPlan.filter((day) => day.visited).length;
   const totalMinorStops = dailyPlan.reduce(
@@ -241,6 +304,17 @@ function App() {
     ? Math.round((visitedCount / dailyPlan.length) * 100)
     : 0;
   const remainingBudget = tripMeta.targetBudget - totalExpense - shoppingTotal;
+
+  const categoryTotals = useMemo(
+    () =>
+      expenseCategories.map((category) => ({
+        category,
+        total: expenses
+          .filter((item) => item.category === category)
+          .reduce((sum, item) => sum + Number(item.amount), 0),
+      })),
+    [expenseCategories, expenses],
+  );
 
   const majorMarkers = useMemo(
     () =>
@@ -271,7 +345,7 @@ function App() {
           )
           .map((stop) => ({
             id: stop.id,
-            label: `${day.dayLabel}: ${stop.name || 'Minor Stop'}`,
+            label: `${day.dayLabel}: ${stop.name || 'Stop'}`,
             description: stop.note || day.endPoint || '',
             lat: Number(stop.lat),
             lng: Number(stop.lng),
@@ -282,7 +356,7 @@ function App() {
   );
 
   const majorCoordinates = majorMarkers.map((marker) => [marker.lat, marker.lng]);
-  const allCoordinates = [...majorCoordinates, ...minorMarkers.map((marker) => [marker.lat, marker.lng])];
+  const minorCoordinates = minorMarkers.map((marker) => [marker.lat, marker.lng]);
 
   const toggleChecklist = (setItems, id) => {
     setItems((currentItems) =>
@@ -290,6 +364,22 @@ function App() {
         item.id === id ? { ...item, done: !item.done } : item,
       ),
     );
+  };
+
+  const updateChecklistLabel = (setItems, id, label) => {
+    setItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === id ? { ...item, label } : item,
+      ),
+    );
+  };
+
+  const addChecklistItem = (setItems, prefix) => {
+    setItems((currentItems) => [...currentItems, createChecklistItem(prefix)]);
+  };
+
+  const removeChecklistItem = (setItems, id) => {
+    setItems((currentItems) => currentItems.filter((item) => item.id !== id));
   };
 
   const updateDayField = (dayId, field, value) => {
@@ -309,10 +399,9 @@ function App() {
   };
 
   const addDay = () => {
-    setDailyPlan((currentDays) => [
-      ...currentDays,
-      createDayTemplate(currentDays.length + 1),
-    ]);
+    const newDay = createDayTemplate(dailyPlan.length + 1);
+    setDailyPlan((currentDays) => [...currentDays, newDay]);
+    setSelectedDayId(newDay.id);
   };
 
   const removeDay = (dayId) => {
@@ -394,13 +483,13 @@ function App() {
       ...currentExpenses,
     ]);
 
-    setExpenseDraft({
+    setExpenseDraft((current) => ({
+      ...current,
       title: '',
-      category: expenseDraft.category,
       place: '',
       amount: '',
       date: '',
-    });
+    }));
   };
 
   const deleteExpense = (id) => {
@@ -439,14 +528,19 @@ function App() {
     });
   };
 
+  const updateShoppingItem = (id, field, value) => {
+    setShoppingList((currentItems) =>
+      currentItems.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item,
+      ),
+    );
+  };
+
   const toggleShoppingStatus = (id) => {
     setShoppingList((currentItems) =>
       currentItems.map((item) =>
         item.id === id
-          ? {
-              ...item,
-              status: item.status === 'bought' ? 'pending' : 'bought',
-            }
+          ? { ...item, status: item.status === 'bought' ? 'pending' : 'bought' }
           : item,
       ),
     );
@@ -458,17 +552,33 @@ function App() {
     );
   };
 
+  const addExpenseCategory = () => {
+    const trimmedValue = categoryDraft.trim();
+
+    if (!trimmedValue || expenseCategories.includes(trimmedValue)) {
+      return;
+    }
+
+    setExpenseCategories((currentCategories) => [...currentCategories, trimmedValue]);
+    setCategoryDraft('');
+  };
+
+  const removeExpenseCategory = (categoryToRemove) => {
+    setExpenseCategories((currentCategories) =>
+      currentCategories.filter((category) => category !== categoryToRemove),
+    );
+    setExpenses((currentExpenses) =>
+      currentExpenses.map((item) =>
+        item.category === categoryToRemove ? { ...item, category: 'Other' } : item,
+      ),
+    );
+  };
+
   return (
     <div className="app-shell">
       <header className="hero panel">
         <div className="hero-copy">
-          <p className="eyebrow">Final custom trip planner</p>
-          <h1>{tripMeta.tripName}</h1>
-          <p className="hero-text">
-            A clean editable planner where your day table, end-of-day stops,
-            smaller route stops, shopping links, expenses, and visited status all
-            live in one place.
-          </p>
+          <h1>First Solo Bike Road Trip Planner</h1>
           <div className="hero-meta">
             <span>{tripMeta.dateRange}</span>
             <span>{tripMeta.startLocation}</span>
@@ -477,6 +587,23 @@ function App() {
         </div>
 
         <div className="hero-side">
+          <div className="page-switcher">
+            <button
+              type="button"
+              className={`status-toggle ${activePage === 'planner' ? 'active' : ''}`}
+              onClick={() => setActivePage('planner')}
+            >
+              Planner
+            </button>
+            <button
+              type="button"
+              className={`status-toggle ${activePage === 'settings' ? 'active' : ''}`}
+              onClick={() => setActivePage('settings')}
+            >
+              Settings
+            </button>
+          </div>
+
           <div className="stat-grid">
             <article className="stat-card">
               <span>Visited days</span>
@@ -506,499 +633,737 @@ function App() {
         </div>
       </header>
 
-      <main className="content-grid">
-        <RouteMap
-          eyebrow="Map one"
-          title="Final stop of each day"
-          description="This map tracks the end point for every day. Edit the end point name and overnight coordinates in the stop editor below."
-          coordinates={majorCoordinates}
-          markers={majorMarkers}
-          lineColor="#4c4c52"
-        />
+      {activePage === 'planner' ? (
+        <main className="content-grid">
+          <RouteMap
+            title="Final stop of each day"
+            markers={majorMarkers}
+            coordinates={majorCoordinates}
+            lineColor="#4c4c52"
+          />
 
-        <RouteMap
-          eyebrow="Map two"
-          title="All smaller route stops"
-          description="This map includes the smaller checkpoints, sightseeing points, and route detours you add for each day."
-          coordinates={allCoordinates}
-          markers={minorMarkers.length ? minorMarkers : majorMarkers}
-          lineColor="#8a8a92"
-        />
+          <RouteMap
+            title="All smaller route stops"
+            markers={minorMarkers.length ? minorMarkers : majorMarkers}
+            coordinates={minorMarkers.length ? minorCoordinates : majorCoordinates}
+            lineColor="#8a8a92"
+          />
 
-        <section className="panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Trip focus</p>
-              <h2>What this planner now supports</h2>
+          <ChecklistCard
+            title="Planning checklist"
+            items={planningTasks}
+            onToggle={(id) => toggleChecklist(setPlanningTasks, id)}
+          />
+
+          <ChecklistCard
+            title="Packing checklist"
+            items={packingChecklist}
+            onToggle={(id) => toggleChecklist(setPackingChecklist, id)}
+          />
+
+          <section className="panel day-panel">
+            <div className="section-heading compact-heading">
+              <h2>Detailed route plan</h2>
             </div>
-          </div>
-          <div className="pill-row">
-            {tripMeta.highlights.map((highlight) => (
-              <span className="pill" key={highlight}>
-                {highlight}
-              </span>
-            ))}
-          </div>
-          <p className="panel-copy">{tripMeta.themeNote}</p>
-        </section>
 
-        <ChecklistCard
-          title="Planning checklist"
-          items={planningTasks}
-          onToggle={(id) => toggleChecklist(setPlanningTasks, id)}
-        />
-
-        <ChecklistCard
-          title="Packing checklist"
-          items={packingChecklist}
-          onToggle={(id) => toggleChecklist(setPackingChecklist, id)}
-        />
-
-        <section className="panel table-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Editable planner</p>
-              <h2>Day-by-day route table</h2>
-            </div>
-            <button type="button" className="primary-button" onClick={addDay}>
-              Add day
-            </button>
-          </div>
-
-          <div className="table-wrap">
-            <table className="planner-table">
-              <thead>
-                <tr>
-                  <th>Day</th>
-                  <th>Start Point</th>
-                  <th>End Point</th>
-                  <th>Distance</th>
-                  <th>Places to stay</th>
-                  <th>Places to go</th>
-                  <th>Route</th>
-                  <th>Things to do</th>
-                  <th>Speciality food</th>
-                  <th>Should do before going</th>
-                  <th>Done</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dailyPlan.map((day) => (
-                  <tr key={day.id}>
-                    <td>
-                      <textarea
-                        value={day.dayLabel}
-                        onChange={(event) =>
-                          updateDayField(day.id, 'dayLabel', event.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <textarea
-                        value={day.startPoint}
-                        onChange={(event) =>
-                          updateDayField(day.id, 'startPoint', event.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <textarea
-                        value={day.endPoint}
-                        onChange={(event) =>
-                          updateDayField(day.id, 'endPoint', event.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <textarea
-                        value={day.distance}
-                        onChange={(event) =>
-                          updateDayField(day.id, 'distance', event.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <textarea
-                        value={day.placesToStay}
-                        onChange={(event) =>
-                          updateDayField(day.id, 'placesToStay', event.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <textarea
-                        value={day.placesToGo}
-                        onChange={(event) =>
-                          updateDayField(day.id, 'placesToGo', event.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <textarea
-                        value={day.route}
-                        onChange={(event) =>
-                          updateDayField(day.id, 'route', event.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <textarea
-                        value={day.thingsToDo}
-                        onChange={(event) =>
-                          updateDayField(day.id, 'thingsToDo', event.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <textarea
-                        value={day.specialityFood}
-                        onChange={(event) =>
-                          updateDayField(day.id, 'specialityFood', event.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <textarea
-                        value={day.beforeGoing}
-                        onChange={(event) =>
-                          updateDayField(day.id, 'beforeGoing', event.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className={`status-toggle full-width ${day.visited ? 'active' : ''}`}
-                        onClick={() => toggleVisited(day.id)}
-                      >
-                        {day.visited ? 'Visited' : 'Pending'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="panel editor-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Map stop editor</p>
-              <h2>Edit final stops and smaller stops</h2>
-            </div>
-          </div>
-
-          <div className="editor-list">
-            {dailyPlan.map((day) => (
-              <article className="editor-card" key={day.id}>
-                <div className="editor-card-top">
-                  <div>
-                    <h3>{day.dayLabel}</h3>
-                    <p>
-                      {day.startPoint || 'Start'} to {day.endPoint || 'End'}
-                    </p>
-                  </div>
-                  <div className="editor-actions">
+            <div className="day-list">
+              {dailyPlan.map((day) => (
+                <article className="day-card" key={day.id}>
+                  <div className="day-card-top">
+                    <div>
+                      <p className="day-label">{day.dayLabel}</p>
+                      <h3>
+                        {day.startPoint || 'Start'} to {day.endPoint || 'End'}
+                      </h3>
+                    </div>
                     <button
                       type="button"
                       className={`status-toggle ${day.visited ? 'active' : ''}`}
                       onClick={() => toggleVisited(day.id)}
                     >
-                      {day.visited ? 'Visited' : 'Mark visited'}
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => removeDay(day.id)}
-                    >
-                      Remove day
+                      {day.visited ? 'Visited' : 'Pending'}
                     </button>
                   </div>
-                </div>
 
-                <div className="coordinate-grid">
-                  <label>
-                    <span>Final stop latitude</span>
-                    <input
-                      type="number"
-                      step="any"
-                      value={day.overnightLat}
-                      onChange={(event) =>
-                        updateDayField(day.id, 'overnightLat', event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>Final stop longitude</span>
-                    <input
-                      type="number"
-                      step="any"
-                      value={day.overnightLng}
-                      onChange={(event) =>
-                        updateDayField(day.id, 'overnightLng', event.target.value)
-                      }
-                    />
-                  </label>
-                </div>
-
-                <div className="minor-stop-list">
-                  {day.minorStops.map((stop) => (
-                    <div className="minor-stop-card" key={stop.id}>
-                      <div className="minor-stop-grid">
-                        <input
-                          type="text"
-                          value={stop.name}
-                          placeholder="Stop name"
-                          onChange={(event) =>
-                            updateMinorStop(day.id, stop.id, 'name', event.target.value)
-                          }
-                        />
-                        <input
-                          type="text"
-                          value={stop.url}
-                          placeholder="Google Maps link"
-                          onChange={(event) =>
-                            updateMinorStop(day.id, stop.id, 'url', event.target.value)
-                          }
-                        />
-                        <input
-                          type="number"
-                          step="any"
-                          value={stop.lat}
-                          placeholder="Latitude"
-                          onChange={(event) =>
-                            updateMinorStop(day.id, stop.id, 'lat', event.target.value)
-                          }
-                        />
-                        <input
-                          type="number"
-                          step="any"
-                          value={stop.lng}
-                          placeholder="Longitude"
-                          onChange={(event) =>
-                            updateMinorStop(day.id, stop.id, 'lng', event.target.value)
-                          }
-                        />
-                      </div>
-                      <textarea
-                        value={stop.note}
-                        placeholder="Notes for this stop"
-                        onChange={(event) =>
-                          updateMinorStop(day.id, stop.id, 'note', event.target.value)
-                        }
-                      />
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => removeMinorStop(day.id, stop.id)}
-                      >
-                        Remove stop
-                      </button>
+                  <div className="day-meta-grid">
+                    <div className="meta-card">
+                      <span>Start point</span>
+                      <strong>{day.startPoint || '-'}</strong>
                     </div>
+                    <div className="meta-card">
+                      <span>End point</span>
+                      <strong>{day.endPoint || '-'}</strong>
+                    </div>
+                    <div className="meta-card">
+                      <span>Distance</span>
+                      <strong>{day.distance || '-'}</strong>
+                    </div>
+                    <div className="meta-card">
+                      <span>Places to stay</span>
+                      <strong>{day.placesToStay || '-'}</strong>
+                    </div>
+                  </div>
+
+                  <div className="detail-grid">
+                    <div className="detail-block">
+                      <h4>Places to go</h4>
+                      <ul className="plain-list">
+                        {splitLines(day.placesToGo).length
+                          ? splitLines(day.placesToGo).map((item) => (
+                              <li key={item}>{item}</li>
+                            ))
+                          : <li>-</li>}
+                      </ul>
+                    </div>
+
+                    <div className="detail-block">
+                      <h4>Route</h4>
+                      <ul className="plain-list">
+                        {parseRouteLinks(day.route).length
+                          ? parseRouteLinks(day.route).map((item) => (
+                              <li key={`${day.id}-${item.url}-${item.label}`}>
+                                {item.url ? (
+                                  <a href={item.url} target="_blank" rel="noreferrer">
+                                    {item.label}
+                                  </a>
+                                ) : (
+                                  item.label
+                                )}
+                              </li>
+                            ))
+                          : <li>-</li>}
+                      </ul>
+                    </div>
+
+                    <div className="detail-block">
+                      <h4>Things to do</h4>
+                      <ul className="plain-list">
+                        {splitLines(day.thingsToDo).length
+                          ? splitLines(day.thingsToDo).map((item) => (
+                              <li key={item}>{item}</li>
+                            ))
+                          : <li>-</li>}
+                      </ul>
+                    </div>
+
+                    <div className="detail-block">
+                      <h4>Speciality food</h4>
+                      <ul className="plain-list">
+                        {splitLines(day.specialityFood).length
+                          ? splitLines(day.specialityFood).map((item) => (
+                              <li key={item}>{item}</li>
+                            ))
+                          : <li>-</li>}
+                      </ul>
+                    </div>
+
+                    <div className="detail-block">
+                      <h4>Should do before going</h4>
+                      <ul className="plain-list">
+                        {splitLines(day.beforeGoing).length
+                          ? splitLines(day.beforeGoing).map((item) => (
+                              <li key={item}>{item}</li>
+                            ))
+                          : <li>-</li>}
+                      </ul>
+                    </div>
+
+                    <div className="detail-block">
+                      <h4>Stops on the way</h4>
+                      <ul className="plain-list">
+                        {day.minorStops.length
+                          ? day.minorStops.map((stop) => (
+                              <li key={stop.id}>
+                                {stop.url ? (
+                                  <a href={stop.url} target="_blank" rel="noreferrer">
+                                    {stop.name || 'Stop'}
+                                  </a>
+                                ) : (
+                                  stop.name || 'Stop'
+                                )}
+                              </li>
+                            ))
+                          : <li>-</li>}
+                      </ul>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel budget-panel">
+            <div className="section-heading compact-heading">
+              <h2>Spending overview</h2>
+              <span className="badge">{formatCurrency(remainingBudget)} left</span>
+            </div>
+
+            <div className="budget-grid">
+              <article className="budget-card">
+                <span>Target budget</span>
+                <strong>{formatCurrency(tripMeta.targetBudget)}</strong>
+              </article>
+              <article className="budget-card">
+                <span>Logged expenses</span>
+                <strong>{formatCurrency(totalExpense)}</strong>
+              </article>
+              <article className="budget-card">
+                <span>Buy list total</span>
+                <strong>{formatCurrency(shoppingTotal)}</strong>
+              </article>
+              <article className="budget-card">
+                <span>Estimated left</span>
+                <strong>{formatCurrency(remainingBudget)}</strong>
+              </article>
+            </div>
+
+            <div className="category-grid">
+              {categoryTotals.map((item) => (
+                <article className="category-card" key={item.category}>
+                  <span>{item.category}</span>
+                  <strong>{formatCurrency(item.total)}</strong>
+                </article>
+              ))}
+            </div>
+          </section>
+        </main>
+      ) : (
+        <main className="content-grid">
+          <section className="panel settings-panel">
+            <div className="settings-header">
+              <h2>Settings</h2>
+            </div>
+
+            <div className="settings-stack">
+              <div className="settings-topbar">
+                <div className="day-selector">
+                  {dailyPlan.map((day) => (
+                    <button
+                      type="button"
+                      key={day.id}
+                      className={`day-tab ${selectedDayId === day.id ? 'active' : ''}`}
+                      onClick={() => setSelectedDayId(day.id)}
+                    >
+                      {day.dayLabel}
+                    </button>
                   ))}
                 </div>
-
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => addMinorStop(day.id)}
-                >
-                  Add smaller stop
+                <button type="button" className="primary-button add-button" onClick={addDay}>
+                  Add day
                 </button>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel budget-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Budget</p>
-              <h2>Expenses and buy list</h2>
-            </div>
-            <span className="badge">
-              {formatCurrency(remainingBudget)} left
-            </span>
-          </div>
-
-          <div className="budget-grid">
-            <article className="budget-card">
-              <span>Target budget</span>
-              <strong>{formatCurrency(tripMeta.targetBudget)}</strong>
-            </article>
-            <article className="budget-card">
-              <span>Logged expenses</span>
-              <strong>{formatCurrency(totalExpense)}</strong>
-            </article>
-            <article className="budget-card">
-              <span>Buy list total</span>
-              <strong>{formatCurrency(shoppingTotal)}</strong>
-            </article>
-            <article className="budget-card">
-              <span>Estimated left</span>
-              <strong>{formatCurrency(remainingBudget)}</strong>
-            </article>
-          </div>
-
-          <div className="dual-section">
-            <div>
-              <h3 className="subheading">Add expense</h3>
-              <form className="expense-form" onSubmit={handleExpenseSubmit}>
-                <input
-                  type="text"
-                  name="title"
-                  value={expenseDraft.title}
-                  onChange={handleExpenseChange}
-                  placeholder="Expense title"
-                />
-                <select
-                  name="category"
-                  value={expenseDraft.category}
-                  onChange={handleExpenseChange}
-                >
-                  <option value="Fuel">Fuel</option>
-                  <option value="Food">Food</option>
-                  <option value="Stay">Stay</option>
-                  <option value="Shopping">Shopping</option>
-                  <option value="Other">Other</option>
-                </select>
-                <input
-                  type="text"
-                  name="place"
-                  value={expenseDraft.place}
-                  onChange={handleExpenseChange}
-                  placeholder="Place"
-                />
-                <input
-                  type="number"
-                  min="0"
-                  name="amount"
-                  value={expenseDraft.amount}
-                  onChange={handleExpenseChange}
-                  placeholder="Amount"
-                />
-                <input
-                  type="date"
-                  name="date"
-                  value={expenseDraft.date}
-                  onChange={handleExpenseChange}
-                />
-                <button type="submit" className="primary-button">
-                  Add expense
-                </button>
-              </form>
-
-              <div className="expense-list">
-                {expenses.map((expense) => (
-                  <article className="expense-card" key={expense.id}>
-                    <div>
-                      <h3>{expense.title}</h3>
-                      <p>
-                        {expense.category} - {expense.place} - {expense.date}
-                      </p>
-                    </div>
-                    <div className="expense-actions">
-                      <strong>{formatCurrency(expense.amount)}</strong>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => deleteExpense(expense.id)}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </article>
-                ))}
               </div>
-            </div>
 
-            <div>
-              <h3 className="subheading">Things to buy</h3>
-              <form className="shopping-form" onSubmit={handleShoppingSubmit}>
-                <input
-                  type="text"
-                  name="item"
-                  value={shoppingDraft.item}
-                  onChange={handleShoppingChange}
-                  placeholder="Item to buy"
-                />
-                <input
-                  type="text"
-                  name="link"
-                  value={shoppingDraft.link}
-                  onChange={handleShoppingChange}
-                  placeholder="Product link"
-                />
-                <input
-                  type="number"
-                  min="0"
-                  name="price"
-                  value={shoppingDraft.price}
-                  onChange={handleShoppingChange}
-                  placeholder="Price"
-                />
-                <button type="submit" className="primary-button">
-                  Add item
-                </button>
-              </form>
-
-              <div className="shopping-list">
-                {shoppingList.map((item) => (
-                  <article className="expense-card" key={item.id}>
+              {selectedDay ? (
+                <section className="panel settings-subpanel current-day-panel">
+                  <div className="section-heading compact-heading">
                     <div>
-                      <h3>{item.item}</h3>
-                      <p>
-                        {item.link ? (
-                          <a href={item.link} target="_blank" rel="noreferrer">
-                            Open saved link
-                          </a>
-                        ) : (
-                          'No link saved'
-                        )}
+                      <h2>{selectedDay.dayLabel}</h2>
+                      <p className="subcopy">
+                        {selectedDay.startPoint || 'Start'} to {selectedDay.endPoint || 'End'}
                       </p>
                     </div>
-                    <div className="expense-actions">
-                      <strong>{formatCurrency(item.price)}</strong>
+                    <div className="editor-actions">
                       <button
                         type="button"
-                        className={`status-toggle ${item.status === 'bought' ? 'active' : ''}`}
-                        onClick={() => toggleShoppingStatus(item.id)}
+                        className={`status-toggle ${selectedDay.visited ? 'active' : ''}`}
+                        onClick={() => toggleVisited(selectedDay.id)}
                       >
-                        {item.status === 'bought' ? 'Bought' : 'Pending'}
+                        {selectedDay.visited ? 'Visited' : 'Pending'}
                       </button>
                       <button
                         type="button"
                         className="ghost-button"
-                        onClick={() => deleteShoppingItem(item.id)}
+                        onClick={() => removeDay(selectedDay.id)}
                       >
-                        Remove
+                        Remove day
                       </button>
                     </div>
-                  </article>
-                ))}
+                  </div>
+
+                  <div className="settings-form-grid large-grid">
+                    <input
+                      type="text"
+                      value={selectedDay.dayLabel}
+                      placeholder="Day label"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'dayLabel', event.target.value)
+                      }
+                    />
+                    <input
+                      type="text"
+                      value={selectedDay.startPoint}
+                      placeholder="Start point"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'startPoint', event.target.value)
+                      }
+                    />
+                    <input
+                      type="text"
+                      value={selectedDay.endPoint}
+                      placeholder="End point"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'endPoint', event.target.value)
+                      }
+                    />
+                    <input
+                      type="text"
+                      value={selectedDay.distance}
+                      placeholder="Distance"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'distance', event.target.value)
+                      }
+                    />
+                    <input
+                      type="text"
+                      value={selectedDay.placesToStay}
+                      placeholder="Places to stay"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'placesToStay', event.target.value)
+                      }
+                    />
+                    <input
+                      type="number"
+                      step="any"
+                      value={selectedDay.startLat}
+                      placeholder="Start latitude"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'startLat', event.target.value)
+                      }
+                    />
+                    <input
+                      type="number"
+                      step="any"
+                      value={selectedDay.startLng}
+                      placeholder="Start longitude"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'startLng', event.target.value)
+                      }
+                    />
+                    <input
+                      type="number"
+                      step="any"
+                      value={selectedDay.overnightLat}
+                      placeholder="End latitude"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'overnightLat', event.target.value)
+                      }
+                    />
+                    <input
+                      type="number"
+                      step="any"
+                      value={selectedDay.overnightLng}
+                      placeholder="End longitude"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'overnightLng', event.target.value)
+                      }
+                    />
+                  </div>
+
+                  <div className="settings-form-stack">
+                    <textarea
+                      value={selectedDay.placesToGo}
+                      placeholder="Places to go"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'placesToGo', event.target.value)
+                      }
+                    />
+                    <textarea
+                      value={selectedDay.route}
+                      placeholder="Route links"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'route', event.target.value)
+                      }
+                    />
+                    <textarea
+                      value={selectedDay.thingsToDo}
+                      placeholder="Things to do"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'thingsToDo', event.target.value)
+                      }
+                    />
+                    <textarea
+                      value={selectedDay.specialityFood}
+                      placeholder="Speciality food"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'specialityFood', event.target.value)
+                      }
+                    />
+                    <textarea
+                      value={selectedDay.beforeGoing}
+                      placeholder="Should do before going"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'beforeGoing', event.target.value)
+                      }
+                    />
+                  </div>
+
+                  <div className="section-heading compact-heading inner-heading">
+                    <h2>Stops on the way</h2>
+                    <button
+                      type="button"
+                      className="primary-button add-button"
+                      onClick={() => addMinorStop(selectedDay.id)}
+                    >
+                      Add stop
+                    </button>
+                  </div>
+
+                  <div className="minor-stop-list">
+                    {selectedDay.minorStops.map((stop) => (
+                      <div className="minor-stop-card" key={stop.id}>
+                        <div className="minor-stop-grid">
+                          <input
+                            type="text"
+                            value={stop.name}
+                            placeholder="Stop name"
+                            onChange={(event) =>
+                              updateMinorStop(selectedDay.id, stop.id, 'name', event.target.value)
+                            }
+                          />
+                          <input
+                            type="text"
+                            value={stop.url}
+                            placeholder="Google Maps link"
+                            onChange={(event) =>
+                              updateMinorStop(selectedDay.id, stop.id, 'url', event.target.value)
+                            }
+                          />
+                          <input
+                            type="number"
+                            step="any"
+                            value={stop.lat}
+                            placeholder="Latitude"
+                            onChange={(event) =>
+                              updateMinorStop(selectedDay.id, stop.id, 'lat', event.target.value)
+                            }
+                          />
+                          <input
+                            type="number"
+                            step="any"
+                            value={stop.lng}
+                            placeholder="Longitude"
+                            onChange={(event) =>
+                              updateMinorStop(selectedDay.id, stop.id, 'lng', event.target.value)
+                            }
+                          />
+                        </div>
+                        <textarea
+                          value={stop.note}
+                          placeholder="Stop note"
+                          onChange={(event) =>
+                            updateMinorStop(selectedDay.id, stop.id, 'note', event.target.value)
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => removeMinorStop(selectedDay.id, stop.id)}
+                        >
+                          Remove stop
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              <div className="settings-two-column">
+                <section className="panel settings-subpanel">
+                  <div className="section-heading compact-heading">
+                    <h2>Planning checklist</h2>
+                    <button
+                      type="button"
+                      className="primary-button add-button"
+                      onClick={() => addChecklistItem(setPlanningTasks, 'planning')}
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="settings-list">
+                    {planningTasks.map((item) => (
+                      <div className="settings-row" key={item.id}>
+                        <input
+                          type="text"
+                          value={item.label}
+                          placeholder="Checklist item"
+                          onChange={(event) =>
+                            updateChecklistLabel(
+                              setPlanningTasks,
+                              item.id,
+                              event.target.value,
+                            )
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => removeChecklistItem(setPlanningTasks, item.id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="panel settings-subpanel">
+                  <div className="section-heading compact-heading">
+                    <h2>Packing checklist</h2>
+                    <button
+                      type="button"
+                      className="primary-button add-button"
+                      onClick={() => addChecklistItem(setPackingChecklist, 'packing')}
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="settings-list">
+                    {packingChecklist.map((item) => (
+                      <div className="settings-row" key={item.id}>
+                        <input
+                          type="text"
+                          value={item.label}
+                          placeholder="Checklist item"
+                          onChange={(event) =>
+                            updateChecklistLabel(
+                              setPackingChecklist,
+                              item.id,
+                              event.target.value,
+                            )
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => removeChecklistItem(setPackingChecklist, item.id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+
+              <div className="settings-two-column">
+                <section className="panel settings-subpanel">
+                  <div className="section-heading compact-heading">
+                    <h2>Expense categories</h2>
+                  </div>
+
+                  <div className="settings-row add-row">
+                    <input
+                      type="text"
+                      value={categoryDraft}
+                      placeholder="New category"
+                      onChange={(event) => setCategoryDraft(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="primary-button add-button"
+                      onClick={addExpenseCategory}
+                    >
+                      Add
+                    </button>
+                  </div>
+
+                  <div className="compact-category-list">
+                    {expenseCategories.map((category) => (
+                      <div className="compact-category-item" key={category}>
+                        <span>{category}</span>
+                        <button
+                          type="button"
+                          className="ghost-button small-button"
+                          onClick={() => removeExpenseCategory(category)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="panel settings-subpanel">
+                  <div className="section-heading compact-heading">
+                    <h2>Expenses</h2>
+                  </div>
+
+                  <form className="expense-form" onSubmit={handleExpenseSubmit}>
+                    <input
+                      type="text"
+                      name="title"
+                      value={expenseDraft.title}
+                      onChange={handleExpenseChange}
+                      placeholder="Expense title"
+                    />
+                    <select
+                      name="category"
+                      value={expenseDraft.category}
+                      onChange={handleExpenseChange}
+                    >
+                      {expenseCategories.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      name="place"
+                      value={expenseDraft.place}
+                      onChange={handleExpenseChange}
+                      placeholder="Place"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      name="amount"
+                      value={expenseDraft.amount}
+                      onChange={handleExpenseChange}
+                      placeholder="Amount"
+                    />
+                    <input
+                      type="date"
+                      name="date"
+                      value={expenseDraft.date}
+                      onChange={handleExpenseChange}
+                    />
+                    <button type="submit" className="primary-button add-button">
+                      Add
+                    </button>
+                  </form>
+
+                  <div className="expense-list">
+                    {expenses.map((expense) => (
+                      <article className="expense-card" key={expense.id}>
+                        <div>
+                          <h3>{expense.title}</h3>
+                          <p>
+                            {expense.category} - {expense.place} - {expense.date}
+                          </p>
+                        </div>
+                        <div className="expense-actions">
+                          <strong>{formatCurrency(expense.amount)}</strong>
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => deleteExpense(expense.id)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              </div>
+
+              <div className="settings-two-column">
+                <section className="panel settings-subpanel">
+                  <div className="section-heading compact-heading">
+                    <h2>Things to buy</h2>
+                  </div>
+
+                  <form className="shopping-form" onSubmit={handleShoppingSubmit}>
+                    <input
+                      type="text"
+                      name="item"
+                      value={shoppingDraft.item}
+                      onChange={handleShoppingChange}
+                      placeholder="Item"
+                    />
+                    <input
+                      type="text"
+                      name="link"
+                      value={shoppingDraft.link}
+                      onChange={handleShoppingChange}
+                      placeholder="Product link"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      name="price"
+                      value={shoppingDraft.price}
+                      onChange={handleShoppingChange}
+                      placeholder="Price"
+                    />
+                    <button type="submit" className="primary-button add-button">
+                      Add
+                    </button>
+                  </form>
+
+                  <div className="settings-list">
+                    {shoppingList.map((item) => (
+                      <div className="settings-card" key={item.id}>
+                        <div className="settings-row">
+                          <input
+                            type="text"
+                            value={item.item}
+                            placeholder="Item"
+                            onChange={(event) =>
+                              updateShoppingItem(item.id, 'item', event.target.value)
+                            }
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.price}
+                            placeholder="Price"
+                            onChange={(event) =>
+                              updateShoppingItem(
+                                item.id,
+                                'price',
+                                Number(event.target.value || 0),
+                              )
+                            }
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          value={item.link}
+                          placeholder="Product link"
+                          onChange={(event) =>
+                            updateShoppingItem(item.id, 'link', event.target.value)
+                          }
+                        />
+                        <div className="settings-row">
+                          <button
+                            type="button"
+                            className={`status-toggle ${item.status === 'bought' ? 'active' : ''}`}
+                            onClick={() => toggleShoppingStatus(item.id)}
+                          >
+                            {item.status === 'bought' ? 'Bought' : 'Pending'}
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => deleteShoppingItem(item.id)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="panel settings-subpanel">
+                  <div className="section-heading compact-heading">
+                    <h2>Notes</h2>
+                  </div>
+
+                  <textarea
+                    className="notes-box"
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    placeholder="Notes, reminders, timings, permits, and route thoughts..."
+                  />
+                </section>
               </div>
             </div>
-          </div>
-        </section>
-
-        <section className="panel notes-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Notes</p>
-              <h2>Custom notes and reminders</h2>
-            </div>
-            <span className="badge">Auto-saved</span>
-          </div>
-
-          <textarea
-            className="notes-box"
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            placeholder="Add stay ideas, temple timings, route cautions, fuel notes, food spots, and reminders here..."
-          />
-        </section>
-      </main>
+          </section>
+        </main>
+      )}
     </div>
   );
 }

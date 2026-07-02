@@ -1,18 +1,20 @@
 export const tripMeta = {
-  tripName: 'South India Road Trip Planner',
+  tripName: 'First Solo Bike Road Trip Planner',
   dateRange: 'Flexible dates - editable draft',
   startLocation: 'Bangalore',
-  themeNote: 'Minimal grey planning dashboard with editable stops, maps, and trackers.',
   currency: 'INR',
   targetBudget: 120000,
-  highlights: [
-    'Editable day-by-day route table',
-    'Two separate maps',
-    'Visited stop tracking',
-    'Expense logging',
-    'Shopping list with links and prices',
-  ],
 };
+
+export const starterExpenseCategories = [
+  'Fuel',
+  'Food',
+  'Stay',
+  'Shopping',
+  'Bike',
+  'Temple',
+  'Other',
+];
 
 export const planningChecklist = [
   { id: 'vehicle-service', label: 'Get the car serviced and check tyres', done: false },

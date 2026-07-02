@@ -108,6 +108,34 @@ a {
   gap: 10px;
 }
 
+.page-switcher {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.settings-header {
+  margin-bottom: 18px;
+}
+
+.settings-header h2 {
+  margin: 0;
+}
+
+.compact-heading {
+  align-items: center;
+}
+
+.compact-heading h2 {
+  margin: 0;
+}
+
+.subcopy {
+  margin: 6px 0 0;
+  color: #666670;
+}
+
 .hero-meta span,
 .pill,
 .badge {
@@ -156,10 +184,10 @@ a {
   gap: 24px;
 }
 
-.table-panel,
-.editor-panel,
+.day-panel,
 .budget-panel,
-.notes-panel {
+.notes-panel,
+.settings-panel {
   grid-column: 1 / -1;
 }
 
@@ -192,9 +220,98 @@ a {
 .expense-list,
 .shopping-list,
 .editor-list,
-.minor-stop-list {
+.minor-stop-list,
+.day-list,
+.settings-stack,
+.settings-list {
   display: grid;
   gap: 12px;
+}
+
+.day-card {
+  padding: 18px;
+  background: #f3f3f4;
+  border: 1px solid rgba(70, 70, 76, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+.day-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.day-label {
+  margin: 0 0 6px;
+  color: #666670;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+}
+
+.day-card h3,
+.detail-block h4 {
+  margin: 0;
+}
+
+.day-meta-grid,
+.detail-grid,
+.category-grid,
+.settings-two-column,
+.settings-form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.day-meta-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.meta-card,
+.detail-block,
+.category-card,
+.settings-card {
+  padding: 14px;
+  background: #f7f7f8;
+  border: 1px solid rgba(70, 70, 76, 0.08);
+}
+
+.detail-block {
+  min-height: 180px;
+}
+
+.meta-card span,
+.category-card span {
+  display: block;
+  color: #666670;
+  margin-bottom: 8px;
+}
+
+.meta-card strong,
+.category-card strong {
+  font-size: 1rem;
+}
+
+.detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.detail-block h4 {
+  margin-bottom: 10px;
+  font-size: 0.95rem;
+}
+
+.plain-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #4c4c53;
+}
+
+.plain-list li + li {
+  margin-top: 6px;
 }
 
 .check-item {
@@ -213,52 +330,23 @@ a {
   accent-color: #2f2f33;
 }
 
-.table-wrap {
-  overflow-x: auto;
-}
-
-.planner-table {
-  width: 100%;
-  min-width: 1600px;
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-.planner-table th,
-.planner-table td {
-  vertical-align: top;
-  padding: 10px;
-  border-bottom: 1px solid rgba(70, 70, 76, 0.08);
-  text-align: left;
-}
-
-.planner-table th {
-  position: sticky;
-  top: 0;
-  background: #efeff1;
-  color: #404047;
-  font-weight: 600;
-}
-
-.planner-table textarea,
 .notes-box,
 .minor-stop-card textarea,
 .editor-card input,
 .expense-form input,
 .expense-form select,
 .shopping-form input,
-.minor-stop-grid input {
+.minor-stop-grid input,
+.settings-row input,
+.settings-form-grid input,
+.settings-form-stack textarea,
+.settings-card input {
   width: 100%;
   border: 1px solid rgba(70, 70, 76, 0.12);
   background: #fcfcfc;
   color: #18181b;
   border-radius: 0;
   padding: 12px 14px;
-}
-
-.planner-table textarea {
-  min-height: 96px;
-  resize: vertical;
 }
 
 .status-toggle,
@@ -307,9 +395,94 @@ a {
 .expense-form,
 .shopping-form,
 .budget-grid,
-.dual-section {
+.dual-section,
+.settings-form-stack {
   display: grid;
   gap: 12px;
+}
+
+.settings-two-column {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-subpanel {
+  padding: 18px;
+}
+
+.current-day-panel {
+  padding: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(243, 243, 244, 0.95));
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.add-row {
+  margin-bottom: 12px;
+}
+
+.settings-card {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-form-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.large-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.settings-form-stack textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.inner-heading {
+  margin-top: 18px;
+}
+
+.settings-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.day-selector {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  flex: 1;
+}
+
+.day-tab {
+  border: 1px solid rgba(70, 70, 76, 0.12);
+  background: #f7f7f8;
+  color: #202025;
+  padding: 10px 14px;
+  min-width: 112px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.day-tab.active {
+  background: #2e2e31;
+  color: #f5f5f6;
+  border-color: #2e2e31;
+}
+
+.add-button {
+  min-width: 112px;
 }
 
 .coordinate-grid {
@@ -341,6 +514,40 @@ a {
   min-height: 84px;
   margin-bottom: 10px;
   resize: vertical;
+}
+
+.budget-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.category-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.category-card .ghost-button {
+  margin-top: auto;
+}
+
+.compact-category-list {
+  display: grid;
+  gap: 10px;
+}
+
+.compact-category-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f7f7f8;
+  border: 1px solid rgba(70, 70, 76, 0.08);
+}
+
+.small-button {
+  padding: 8px 10px;
+  min-width: 0;
 }
 
 .budget-grid {
@@ -397,13 +604,16 @@ a {
 }
 
 .notes-box:focus,
-.planner-table textarea:focus,
 .editor-card input:focus,
 .expense-form input:focus,
 .expense-form select:focus,
 .shopping-form input:focus,
 .minor-stop-card textarea:focus,
 .minor-stop-grid input:focus,
+.settings-row input:focus,
+.settings-form-grid input:focus,
+.settings-form-stack textarea:focus,
+.settings-card input:focus,
 .status-toggle:focus-visible,
 .primary-button:focus-visible,
 .ghost-button:focus-visible {
@@ -414,17 +624,23 @@ a {
 @media (max-width: 1180px) {
   .hero,
   .content-grid,
-  .dual-section {
+  .dual-section,
+  .settings-two-column {
     grid-template-columns: 1fr;
   }
 
-  .budget-grid {
+  .budget-grid,
+  .category-grid,
+  .day-meta-grid,
+  .settings-form-grid,
+  .large-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .expense-form,
   .shopping-form,
-  .minor-stop-grid {
+  .minor-stop-grid,
+  .detail-grid {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -441,23 +657,33 @@ a {
 
   .stat-grid,
   .budget-grid,
+  .category-grid,
+  .day-meta-grid,
   .coordinate-grid,
   .expense-form,
   .shopping-form,
-  .minor-stop-grid {
+  .minor-stop-grid,
+  .detail-grid,
+  .settings-form-grid,
+  .settings-row {
     grid-template-columns: 1fr;
   }
 
   .section-heading,
+  .day-card-top,
   .editor-card-top,
   .expense-card,
-  .expense-actions {
+  .expense-actions,
+  .settings-topbar,
+  .compact-category-item {
     flex-direction: column;
   }
 
   .status-toggle,
   .primary-button,
-  .ghost-button {
+  .ghost-button,
+  .day-tab,
+  .add-button {
     width: 100%;
   }
 }
