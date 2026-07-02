@@ -28,6 +28,7 @@ const shoppingStorageKey = 'tripflow-shopping';
 const categoriesStorageKey = 'tripflow-expense-categories';
 const activePageStorageKey = 'tripflow-active-page';
 const selectedDayStorageKey = 'tripflow-selected-day';
+const plannerDayStorageKey = 'tripflow-planner-day';
 
 function loadStoredValue(key, fallback) {
   const savedValue = window.localStorage.getItem(key);
@@ -51,6 +52,46 @@ function formatCurrency(amount) {
   }).format(amount || 0);
 }
 
+function normalizeMinorStop(stop, index) {
+  return {
+    id: stop.id || `minor-${Date.now()}-${index}`,
+    name: stop.name || '',
+    url: stop.url || '',
+    lat: stop.lat ?? '',
+    lng: stop.lng ?? '',
+    note: stop.note || '',
+    distanceFromStart: stop.distanceFromStart || '',
+  };
+}
+
+function normalizeDailyPlan(days) {
+  return days.map((day, index) => ({
+    ...day,
+    id: day.id || `day-${index + 1}`,
+    dayLabel: day.dayLabel || `Day ${index + 1}`,
+    startPoint: day.startPoint || '',
+    endPoint: day.endPoint || '',
+    distance: day.distance || '',
+    placesToStay: day.placesToStay || '',
+    placesToGo: day.placesToGo || '',
+    route: day.route || '',
+    routeMapLink: day.routeMapLink || '',
+    thingsToDo: day.thingsToDo || '',
+    specialityFood: day.specialityFood || '',
+    beforeGoing: day.beforeGoing || '',
+    visited: Boolean(day.visited),
+    startLat: day.startLat ?? '',
+    startLng: day.startLng ?? '',
+    overnightLat: day.overnightLat ?? '',
+    overnightLng: day.overnightLng ?? '',
+    minorStops: (day.minorStops || []).map(normalizeMinorStop),
+  }));
+}
+
+function getPreferredPlannerDayId(days) {
+  return days.find((day) => !day.visited)?.id || days[0]?.id || '';
+}
+
 function createDayTemplate(dayNumber) {
   return {
     id: `day-${Date.now()}-${dayNumber}`,
@@ -61,6 +102,7 @@ function createDayTemplate(dayNumber) {
     placesToStay: '',
     placesToGo: '',
     route: '',
+    routeMapLink: '',
     thingsToDo: '',
     specialityFood: '',
     beforeGoing: '',
@@ -198,10 +240,13 @@ function App() {
     loadStoredValue(activePageStorageKey, 'planner'),
   );
   const [dailyPlan, setDailyPlan] = useState(() =>
-    loadStoredValue(dailyPlanStorageKey, initialDailyPlan),
+    normalizeDailyPlan(loadStoredValue(dailyPlanStorageKey, initialDailyPlan)),
   );
   const [selectedDayId, setSelectedDayId] = useState(() =>
     loadStoredValue(selectedDayStorageKey, initialDailyPlan[0]?.id || ''),
+  );
+  const [plannerDayId, setPlannerDayId] = useState(() =>
+    loadStoredValue(plannerDayStorageKey, getPreferredPlannerDayId(normalizeDailyPlan(initialDailyPlan))),
   );
   const [planningTasks, setPlanningTasks] = useState(() =>
     loadStoredValue(planningStorageKey, defaultPlanningChecklist),
@@ -248,10 +293,20 @@ function App() {
   }, [selectedDayId]);
 
   useEffect(() => {
+    window.localStorage.setItem(plannerDayStorageKey, JSON.stringify(plannerDayId));
+  }, [plannerDayId]);
+
+  useEffect(() => {
     if (!dailyPlan.find((day) => day.id === selectedDayId)) {
       setSelectedDayId(dailyPlan[0]?.id || '');
     }
   }, [dailyPlan, selectedDayId]);
+
+  useEffect(() => {
+    if (!dailyPlan.find((day) => day.id === plannerDayId)) {
+      setPlannerDayId(getPreferredPlannerDayId(dailyPlan));
+    }
+  }, [dailyPlan, plannerDayId]);
 
   useEffect(() => {
     window.localStorage.setItem(planningStorageKey, JSON.stringify(planningTasks));
@@ -288,6 +343,14 @@ function App() {
 
   const selectedDay =
     dailyPlan.find((day) => day.id === selectedDayId) || dailyPlan[0] || null;
+  const plannerDay =
+    dailyPlan.find((day) => day.id === plannerDayId) ||
+    dailyPlan.find((day) => !day.visited) ||
+    dailyPlan[0] ||
+    null;
+  const plannerDayIndex = plannerDay
+    ? dailyPlan.findIndex((day) => day.id === plannerDay.id)
+    : -1;
 
   const visitedCount = dailyPlan.filter((day) => day.visited).length;
   const totalMinorStops = dailyPlan.reduce(
@@ -315,6 +378,8 @@ function App() {
       })),
     [expenseCategories, expenses],
   );
+  const recentExpenses = expenses.slice(0, 6);
+  const maxCategoryTotal = Math.max(...categoryTotals.map((item) => item.total), 0);
 
   const majorMarkers = useMemo(
     () =>
@@ -402,6 +467,7 @@ function App() {
     const newDay = createDayTemplate(dailyPlan.length + 1);
     setDailyPlan((currentDays) => [...currentDays, newDay]);
     setSelectedDayId(newDay.id);
+    setPlannerDayId(newDay.id);
   };
 
   const removeDay = (dayId) => {
@@ -423,6 +489,7 @@ function App() {
                   lat: '',
                   lng: '',
                   note: '',
+                  distanceFromStart: '',
                 },
               ],
             }
@@ -574,6 +641,24 @@ function App() {
     );
   };
 
+  const goToPlannerDay = (direction) => {
+    const nextIndex = plannerDayIndex + direction;
+
+    if (nextIndex < 0 || nextIndex >= dailyPlan.length) {
+      return;
+    }
+
+    setPlannerDayId(dailyPlan[nextIndex].id);
+  };
+
+  const openRouteMap = (url) => {
+    if (!url) {
+      return;
+    }
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <div className="app-shell">
       <header className="hero panel">
@@ -664,132 +749,209 @@ function App() {
           <section className="panel day-panel">
             <div className="section-heading compact-heading">
               <h2>Detailed route plan</h2>
+              <span className="badge">
+                {plannerDayIndex >= 0 ? `${plannerDayIndex + 1} / ${dailyPlan.length}` : '0 / 0'}
+              </span>
             </div>
 
-            <div className="day-list">
-              {dailyPlan.map((day) => (
-                <article className="day-card" key={day.id}>
-                  <div className="day-card-top">
-                    <div>
-                      <p className="day-label">{day.dayLabel}</p>
-                      <h3>
-                        {day.startPoint || 'Start'} to {day.endPoint || 'End'}
-                      </h3>
-                    </div>
-                    <button
-                      type="button"
-                      className={`status-toggle ${day.visited ? 'active' : ''}`}
-                      onClick={() => toggleVisited(day.id)}
-                    >
-                      {day.visited ? 'Visited' : 'Pending'}
-                    </button>
+            {plannerDay ? (
+              <>
+                <div className="planner-nav">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => goToPlannerDay(-1)}
+                    disabled={plannerDayIndex <= 0}
+                  >
+                    Previous day
+                  </button>
+                  <div className="planner-nav-copy">
+                    <span>Showing</span>
+                    <strong>{plannerDay.dayLabel}</strong>
                   </div>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => goToPlannerDay(1)}
+                    disabled={plannerDayIndex >= dailyPlan.length - 1}
+                  >
+                    Next day
+                  </button>
+                </div>
 
-                  <div className="day-meta-grid">
-                    <div className="meta-card">
-                      <span>Start point</span>
-                      <strong>{day.startPoint || '-'}</strong>
-                    </div>
-                    <div className="meta-card">
-                      <span>End point</span>
-                      <strong>{day.endPoint || '-'}</strong>
-                    </div>
-                    <div className="meta-card">
-                      <span>Distance</span>
-                      <strong>{day.distance || '-'}</strong>
-                    </div>
-                    <div className="meta-card">
-                      <span>Places to stay</span>
-                      <strong>{day.placesToStay || '-'}</strong>
-                    </div>
-                  </div>
-
-                  <div className="detail-grid">
-                    <div className="detail-block">
-                      <h4>Places to go</h4>
-                      <ul className="plain-list">
-                        {splitLines(day.placesToGo).length
-                          ? splitLines(day.placesToGo).map((item) => (
-                              <li key={item}>{item}</li>
-                            ))
-                          : <li>-</li>}
-                      </ul>
-                    </div>
-
-                    <div className="detail-block">
-                      <h4>Route</h4>
-                      <ul className="plain-list">
-                        {parseRouteLinks(day.route).length
-                          ? parseRouteLinks(day.route).map((item) => (
-                              <li key={`${day.id}-${item.url}-${item.label}`}>
-                                {item.url ? (
-                                  <a href={item.url} target="_blank" rel="noreferrer">
-                                    {item.label}
-                                  </a>
-                                ) : (
-                                  item.label
-                                )}
-                              </li>
-                            ))
-                          : <li>-</li>}
-                      </ul>
+                <div className="day-list">
+                  <article className="day-card">
+                    <div className="day-card-top">
+                      <div>
+                        <p className="day-label">{plannerDay.dayLabel}</p>
+                        <h3>
+                          {plannerDay.startPoint || 'Start'} to {plannerDay.endPoint || 'End'}
+                        </h3>
+                      </div>
+                      <div className="day-actions">
+                        <button
+                          type="button"
+                          className={`status-toggle ${plannerDay.visited ? 'active' : ''}`}
+                          onClick={() => toggleVisited(plannerDay.id)}
+                        >
+                          {plannerDay.visited ? 'Visited' : 'Pending'}
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => openRouteMap(plannerDay.routeMapLink)}
+                          disabled={!plannerDay.routeMapLink}
+                        >
+                          Open map
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="detail-block">
-                      <h4>Things to do</h4>
-                      <ul className="plain-list">
-                        {splitLines(day.thingsToDo).length
-                          ? splitLines(day.thingsToDo).map((item) => (
-                              <li key={item}>{item}</li>
-                            ))
-                          : <li>-</li>}
-                      </ul>
+                    <div className="day-meta-grid">
+                      <div className="meta-card">
+                        <span>Start point</span>
+                        <strong>{plannerDay.startPoint || '-'}</strong>
+                      </div>
+                      <div className="meta-card">
+                        <span>End point</span>
+                        <strong>{plannerDay.endPoint || '-'}</strong>
+                      </div>
+                      <div className="meta-card">
+                        <span>Distance</span>
+                        <strong>{plannerDay.distance || '-'}</strong>
+                      </div>
+                      <div className="meta-card">
+                        <span>Places to stay</span>
+                        <strong>{plannerDay.placesToStay || '-'}</strong>
+                      </div>
                     </div>
 
-                    <div className="detail-block">
-                      <h4>Speciality food</h4>
-                      <ul className="plain-list">
-                        {splitLines(day.specialityFood).length
-                          ? splitLines(day.specialityFood).map((item) => (
-                              <li key={item}>{item}</li>
-                            ))
-                          : <li>-</li>}
-                      </ul>
+                    <div className="route-strip">
+                      <div className="route-stop route-stop-main">
+                        <span className="route-stop-label">Start</span>
+                        <strong>{plannerDay.startPoint || 'Start point'}</strong>
+                      </div>
+                      {plannerDay.minorStops.map((stop) => (
+                        <div className="route-stop" key={stop.id}>
+                          <span className="route-stop-label">
+                            {stop.distanceFromStart || 'Distance not set'}
+                          </span>
+                          <strong>{stop.name || 'Stop'}</strong>
+                        </div>
+                      ))}
+                      <div className="route-stop route-stop-main">
+                        <span className="route-stop-label">End</span>
+                        <strong>{plannerDay.endPoint || 'End point'}</strong>
+                      </div>
                     </div>
 
-                    <div className="detail-block">
-                      <h4>Should do before going</h4>
-                      <ul className="plain-list">
-                        {splitLines(day.beforeGoing).length
-                          ? splitLines(day.beforeGoing).map((item) => (
-                              <li key={item}>{item}</li>
-                            ))
-                          : <li>-</li>}
-                      </ul>
-                    </div>
+                    <div className="detail-grid">
+                      <div className="detail-block">
+                        <h4>Places to go</h4>
+                        <ul className="plain-list">
+                          {splitLines(plannerDay.placesToGo).length
+                            ? splitLines(plannerDay.placesToGo).map((item) => (
+                                <li key={item}>{item}</li>
+                              ))
+                            : <li>-</li>}
+                        </ul>
+                      </div>
 
-                    <div className="detail-block">
-                      <h4>Stops on the way</h4>
-                      <ul className="plain-list">
-                        {day.minorStops.length
-                          ? day.minorStops.map((stop) => (
-                              <li key={stop.id}>
-                                {stop.url ? (
-                                  <a href={stop.url} target="_blank" rel="noreferrer">
-                                    {stop.name || 'Stop'}
-                                  </a>
-                                ) : (
-                                  stop.name || 'Stop'
-                                )}
-                              </li>
-                            ))
-                          : <li>-</li>}
-                      </ul>
+                      <div className="detail-block">
+                        <h4>Route links</h4>
+                        <ul className="plain-list">
+                          {parseRouteLinks(plannerDay.route).length
+                            ? parseRouteLinks(plannerDay.route).map((item) => (
+                                <li key={`${plannerDay.id}-${item.url}-${item.label}`}>
+                                  {item.url ? (
+                                    <a href={item.url} target="_blank" rel="noreferrer">
+                                      {item.label}
+                                    </a>
+                                  ) : (
+                                    item.label
+                                  )}
+                                </li>
+                              ))
+                            : <li>-</li>}
+                        </ul>
+                      </div>
+
+                      <div className="detail-block">
+                        <h4>Things to do</h4>
+                        <ul className="plain-list">
+                          {splitLines(plannerDay.thingsToDo).length
+                            ? splitLines(plannerDay.thingsToDo).map((item) => (
+                                <li key={item}>{item}</li>
+                              ))
+                            : <li>-</li>}
+                        </ul>
+                      </div>
+
+                      <div className="detail-block">
+                        <h4>Speciality food</h4>
+                        <ul className="plain-list">
+                          {splitLines(plannerDay.specialityFood).length
+                            ? splitLines(plannerDay.specialityFood).map((item) => (
+                                <li key={item}>{item}</li>
+                              ))
+                            : <li>-</li>}
+                        </ul>
+                      </div>
+
+                      <div className="detail-block">
+                        <h4>Before you go</h4>
+                        <ul className="plain-list">
+                          {splitLines(plannerDay.beforeGoing).length
+                            ? splitLines(plannerDay.beforeGoing).map((item) => (
+                                <li key={item}>{item}</li>
+                              ))
+                            : <li>-</li>}
+                        </ul>
+                      </div>
+
+                      <div className="detail-block">
+                        <h4>Stops on the way</h4>
+                        <ul className="plain-list">
+                          {plannerDay.minorStops.length
+                            ? plannerDay.minorStops.map((stop) => (
+                                <li key={stop.id}>
+                                  {stop.url ? (
+                                    <a href={stop.url} target="_blank" rel="noreferrer">
+                                      {stop.name || 'Stop'}
+                                    </a>
+                                  ) : (
+                                    stop.name || 'Stop'
+                                  )}
+                                  {stop.distanceFromStart ? ` - ${stop.distanceFromStart}` : ''}
+                                </li>
+                              ))
+                            : <li>-</li>}
+                        </ul>
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
-            </div>
+                  </article>
+                </div>
+
+                <div className="planner-nav planner-nav-bottom">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => goToPlannerDay(-1)}
+                    disabled={plannerDayIndex <= 0}
+                  >
+                    Previous day
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => goToPlannerDay(1)}
+                    disabled={plannerDayIndex >= dailyPlan.length - 1}
+                  >
+                    Next day
+                  </button>
+                </div>
+              </>
+            ) : null}
           </section>
 
           <section className="panel budget-panel">
@@ -817,13 +979,100 @@ function App() {
               </article>
             </div>
 
-            <div className="category-grid">
-              {categoryTotals.map((item) => (
-                <article className="category-card" key={item.category}>
-                  <span>{item.category}</span>
-                  <strong>{formatCurrency(item.total)}</strong>
-                </article>
-              ))}
+            <div className="budget-layout">
+              <div className="expense-quick-panel">
+                <h3 className="subheading">Add spending</h3>
+                <form className="expense-form main-expense-form" onSubmit={handleExpenseSubmit}>
+                  <input
+                    type="text"
+                    name="title"
+                    value={expenseDraft.title}
+                    onChange={handleExpenseChange}
+                    placeholder="Expense title"
+                  />
+                  <select
+                    name="category"
+                    value={expenseDraft.category}
+                    onChange={handleExpenseChange}
+                  >
+                    {expenseCategories.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    name="place"
+                    value={expenseDraft.place}
+                    onChange={handleExpenseChange}
+                    placeholder="Place"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    name="amount"
+                    value={expenseDraft.amount}
+                    onChange={handleExpenseChange}
+                    placeholder="Amount"
+                  />
+                  <input
+                    type="date"
+                    name="date"
+                    value={expenseDraft.date}
+                    onChange={handleExpenseChange}
+                  />
+                  <button type="submit" className="primary-button add-button">
+                    Add
+                  </button>
+                </form>
+
+                <div className="expense-card-grid">
+                  {recentExpenses.map((expense) => (
+                    <article className="expense-tile" key={expense.id}>
+                      <div className="expense-tile-top">
+                        <span>{expense.category}</span>
+                        <strong>{formatCurrency(expense.amount)}</strong>
+                      </div>
+                      <h3>{expense.title}</h3>
+                      <p>
+                        {expense.place} - {expense.date}
+                      </p>
+                      <button
+                        type="button"
+                        className="ghost-button small-button"
+                        onClick={() => deleteExpense(expense.id)}
+                      >
+                        Remove
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              <div className="expense-chart-panel">
+                <h3 className="subheading">Category breakdown</h3>
+                <div className="bar-chart">
+                  {categoryTotals.map((item) => (
+                    <div className="bar-row" key={item.category}>
+                      <div className="bar-row-top">
+                        <span>{item.category}</span>
+                        <strong>{formatCurrency(item.total)}</strong>
+                      </div>
+                      <div className="bar-track">
+                        <div
+                          className="bar-fill"
+                          style={{
+                            width: `${
+                              maxCategoryTotal ? (item.total / maxCategoryTotal) * 100 : 0
+                            }%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </section>
         </main>
@@ -919,6 +1168,14 @@ function App() {
                       placeholder="Places to stay"
                       onChange={(event) =>
                         updateDayField(selectedDay.id, 'placesToStay', event.target.value)
+                      }
+                    />
+                    <input
+                      type="text"
+                      value={selectedDay.routeMapLink}
+                      placeholder="Route map link"
+                      onChange={(event) =>
+                        updateDayField(selectedDay.id, 'routeMapLink', event.target.value)
                       }
                     />
                     <input
@@ -1026,6 +1283,19 @@ function App() {
                             placeholder="Google Maps link"
                             onChange={(event) =>
                               updateMinorStop(selectedDay.id, stop.id, 'url', event.target.value)
+                            }
+                          />
+                          <input
+                            type="text"
+                            value={stop.distanceFromStart}
+                            placeholder="Distance from start"
+                            onChange={(event) =>
+                              updateMinorStop(
+                                selectedDay.id,
+                                stop.id,
+                                'distanceFromStart',
+                                event.target.value,
+                              )
                             }
                           />
                           <input
