@@ -18,6 +18,7 @@ import {
   starterShoppingList,
   tripMeta,
 } from './data/tripData';
+import siteLogo from './favicon.png';
 
 const dailyPlanStorageKey = 'tripflow-daily-plan-v2';
 const planningStorageKey = 'tripflow-planning';
@@ -745,8 +746,13 @@ function App() {
       <header className="hero panel">
         <div className="hero-header-row">
           <div className="hero-copy">
-            <p className="eyebrow">Field Operations</p>
-            <h1>First Solo Bike Road Trip Planner</h1>
+            <div className="hero-brand">
+              <img src={siteLogo} alt="Trip planner logo" className="site-logo" />
+              <div>
+                <p className="eyebrow">Field Operations</p>
+                <h1>First Solo Bike Road Trip Planner</h1>
+              </div>
+            </div>
           </div>
 
           <div className="hero-status-cluster">

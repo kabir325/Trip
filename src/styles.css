@@ -234,6 +234,19 @@ a {
   min-width: 0;
 }
 
+.hero-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.site-logo {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 .hero-side {
   display: flex;
   justify-content: flex-end;
@@ -1068,6 +1081,10 @@ a {
     flex-direction: column;
   }
 
+  .hero-brand {
+    align-items: flex-start;
+  }
+
   .hero-status-cluster,
   .hero-side {
     justify-content: flex-start;
@@ -1128,6 +1145,10 @@ a {
     max-width: none;
   }
 
+  .hero-brand {
+    flex-direction: column;
+  }
+
   .section-heading,
   .day-card-top,
   .editor-card-top,
@@ -1158,4 +1179,10 @@ a {
   .add-button {
     width: 100%;
   }
+}
+
+.site-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
 }
