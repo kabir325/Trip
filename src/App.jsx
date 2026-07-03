@@ -59,6 +59,18 @@ function formatCompactCurrency(amount) {
   }).format(amount || 0);
 }
 
+function hasCoordinate(value) {
+  return value !== '' && value !== null && value !== undefined && Number.isFinite(Number(value));
+}
+
+function getCoordinatePair(lat, lng) {
+  if (!hasCoordinate(lat) || !hasCoordinate(lng)) {
+    return null;
+  }
+
+  return [Number(lat), Number(lng)];
+}
+
 function normalizeMinorStop(stop, index) {
   return {
     id: stop.id || `minor-${Date.now()}-${index}`,
@@ -399,11 +411,7 @@ function App() {
   const majorMarkers = useMemo(
     () =>
       dailyPlan
-        .filter(
-          (day) =>
-            Number.isFinite(Number(day.overnightLat)) &&
-            Number.isFinite(Number(day.overnightLng)),
-        )
+        .filter((day) => hasCoordinate(day.overnightLat) && hasCoordinate(day.overnightLng))
         .map((day) => ({
           id: day.id,
           label: `${day.dayLabel}: ${day.endPoint || 'End Stop'}`,
@@ -417,21 +425,46 @@ function App() {
 
   const minorMarkers = useMemo(
     () =>
-      dailyPlan.flatMap((day) =>
-        day.minorStops
-          .filter(
-            (stop) =>
-              Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng)),
-          )
-          .map((stop) => ({
-            id: stop.id,
-            label: `${day.dayLabel}: ${stop.name || 'Stop'}`,
-            description: stop.note || day.endPoint || '',
-            lat: Number(stop.lat),
-            lng: Number(stop.lng),
-            visited: day.visited,
-          })),
-      ),
+      dailyPlan.flatMap((day) => {
+        const startPair = getCoordinatePair(day.startLat, day.startLng);
+        const endPair = getCoordinatePair(day.overnightLat, day.overnightLng);
+
+        return day.minorStops
+          .map((stop, index) => {
+            const explicitPair = getCoordinatePair(stop.lat, stop.lng);
+
+            if (explicitPair) {
+              return {
+                id: stop.id,
+                label: `${day.dayLabel}: ${stop.name || 'Stop'}`,
+                description: stop.note || day.endPoint || '',
+                lat: explicitPair[0],
+                lng: explicitPair[1],
+                visited: day.visited,
+              };
+            }
+
+            if (!startPair || !endPair) {
+              return null;
+            }
+
+            const fraction = (index + 1) / (day.minorStops.length + 1);
+            const estimatedLat = startPair[0] + (endPair[0] - startPair[0]) * fraction;
+            const estimatedLng = startPair[1] + (endPair[1] - startPair[1]) * fraction;
+
+            return {
+              id: stop.id,
+              label: `${day.dayLabel}: ${stop.name || 'Stop'}`,
+              description: stop.note
+                ? `${stop.note} (estimated route position)`
+                : 'Estimated route position',
+              lat: estimatedLat,
+              lng: estimatedLng,
+              visited: day.visited,
+            };
+          })
+          .filter(Boolean);
+      }),
     [dailyPlan],
   );
 
