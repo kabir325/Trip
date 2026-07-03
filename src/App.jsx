@@ -19,7 +19,7 @@ import {
   tripMeta,
 } from './data/tripData';
 
-const dailyPlanStorageKey = 'tripflow-daily-plan';
+const dailyPlanStorageKey = 'tripflow-daily-plan-v2';
 const planningStorageKey = 'tripflow-planning';
 const packingStorageKey = 'tripflow-packing';
 const expensesStorageKey = 'tripflow-expenses';
@@ -27,8 +27,8 @@ const notesStorageKey = 'tripflow-notes';
 const shoppingStorageKey = 'tripflow-shopping';
 const categoriesStorageKey = 'tripflow-expense-categories';
 const activePageStorageKey = 'tripflow-active-page';
-const selectedDayStorageKey = 'tripflow-selected-day';
-const plannerDayStorageKey = 'tripflow-planner-day';
+const selectedDayStorageKey = 'tripflow-selected-day-v2';
+const plannerDayStorageKey = 'tripflow-planner-day-v2';
 
 function loadStoredValue(key, fallback) {
   const savedValue = window.localStorage.getItem(key);
@@ -76,6 +76,9 @@ function normalizeDailyPlan(days) {
     ...day,
     id: day.id || `day-${index + 1}`,
     dayLabel: day.dayLabel || `Day ${index + 1}`,
+    date: day.date || '',
+    status: day.status || 'PENDING',
+    title: day.title || '',
     startPoint: day.startPoint || '',
     endPoint: day.endPoint || '',
     distance: day.distance || '',
@@ -103,6 +106,9 @@ function createDayTemplate(dayNumber) {
   return {
     id: `day-${Date.now()}-${dayNumber}`,
     dayLabel: `Day ${dayNumber}`,
+    date: '',
+    status: 'PENDING',
+    title: '',
     startPoint: '',
     endPoint: '',
     distance: '',
