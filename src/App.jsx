@@ -407,6 +407,25 @@ function App() {
   const maxCategoryTotal = Math.max(...categoryTotals.map((item) => item.total), 0);
   const chartMax = maxCategoryTotal > 0 ? maxCategoryTotal : 1;
   const chartTicks = [4, 3, 2, 1, 0].map((step) => Math.round((chartMax * step) / 4));
+  const tripStartMarker = useMemo(() => {
+    const firstDay = dailyPlan[0];
+    const startPair = firstDay
+      ? getCoordinatePair(firstDay.startLat, firstDay.startLng)
+      : null;
+
+    if (!firstDay || !startPair) {
+      return null;
+    }
+
+    return {
+      id: 'trip-start',
+      label: `Trip Start: ${firstDay.startPoint || 'Start'}`,
+      description: `${firstDay.dayLabel} origin`,
+      lat: startPair[0],
+      lng: startPair[1],
+      visited: firstDay.visited,
+    };
+  }, [dailyPlan]);
 
   const majorMarkers = useMemo(
     () =>
@@ -468,8 +487,22 @@ function App() {
     [dailyPlan],
   );
 
-  const majorCoordinates = majorMarkers.map((marker) => [marker.lat, marker.lng]);
-  const minorCoordinates = minorMarkers.map((marker) => [marker.lat, marker.lng]);
+  const majorCoordinates = [
+    ...(tripStartMarker ? [[tripStartMarker.lat, tripStartMarker.lng]] : []),
+    ...majorMarkers.map((marker) => [marker.lat, marker.lng]),
+  ];
+  const minorCoordinates = [
+    ...(tripStartMarker ? [[tripStartMarker.lat, tripStartMarker.lng]] : []),
+    ...minorMarkers.map((marker) => [marker.lat, marker.lng]),
+  ];
+  const majorMapMarkers = tripStartMarker
+    ? [tripStartMarker, ...majorMarkers]
+    : majorMarkers;
+  const minorMapMarkers = tripStartMarker
+    ? [tripStartMarker, ...(minorMarkers.length ? minorMarkers : majorMarkers)]
+    : minorMarkers.length
+      ? minorMarkers
+      : majorMarkers;
 
   const toggleChecklist = (setItems, id) => {
     setItems((currentItems) =>
@@ -783,14 +816,14 @@ function App() {
         <main className="content-grid">
           <RouteMap
             title="Final stop of each day"
-            markers={majorMarkers}
+            markers={majorMapMarkers}
             coordinates={majorCoordinates}
             lineColor="#4c4c52"
           />
 
           <RouteMap
             title="All smaller route stops"
-            markers={minorMarkers.length ? minorMarkers : majorMarkers}
+            markers={minorMapMarkers}
             coordinates={minorMarkers.length ? minorCoordinates : majorCoordinates}
             lineColor="#8a8a92"
           />
